@@ -11,7 +11,7 @@ Supported: Astro, Hugo, Eleventy, Jekyll, VitePress, Next.js (static export) and
 Requires Node.js 20 or newer and git.
 
 ```bash
-git clone git@github.com:boehsermoe/static-site-mcp.git /opt/static-site-mcp
+git clone git@github.com:boehsermoe/maia-static-page-mcp.git /opt/static-site-mcp
 cd /opt/static-site-mcp
 npm ci && npm run build
 cp static-mcp.config.example.json static-mcp.config.json
