@@ -1,0 +1,18 @@
+{
+  "stateDir": "/var/lib/static-site-mcp",
+  "server": { "host": "127.0.0.1", "port": 8787, "rateLimit": 120 },
+  "sites": {
+    "example": {
+      "siteUrl": "https://www.example.com/",
+      "root": "/srv/sites/example",
+      "framework": "auto",
+      "publish": { "type": "copy", "targetDir": "/var/www/example.com" }
+    },
+    "blog": {
+      "siteUrl": "https://blog.example.org/",
+      "root": "/srv/sites/blog",
+      "framework": "astro",
+      "publish": { "type": "git", "branch": "main" }
+    }
+  }
+}
