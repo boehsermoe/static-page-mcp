@@ -3,14 +3,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 /**
- * A token as stored: only its SHA-256 hash, the token itself is shown once. It opens exactly the listed sites;
- * a token without sites (or one written before tokens had sites) opens none.
+ * A token as stored: only its SHA-256 hash, the token itself is shown once. A token opens exactly ONE site;
+ * a token without a site (or one written in another format) opens none.
  */
 export interface StoredToken {
   id: string
   name: string
   hash: string
-  sites: string[]
+  site: string
   createdAt: string
 }
 
@@ -32,12 +32,11 @@ async function writeTokens(stateDir: string, tokens: StoredToken[]) {
   await writeFile(tokensFile(stateDir), JSON.stringify(tokens, null, 2), { mode: 0o600 })
 }
 
-/** Creates a token for the given sites (at least one, named explicitly), stores its hash and returns the token (shown once) */
-export async function createToken(stateDir: string, name: string, sites: string[]): Promise<{ token: string; stored: StoredToken }> {
-  const unique = [...new Set(sites)]
-  if (unique.length === 0) throw new Error('A token needs the sites it may manage (--sites a,b)')
+/** Creates a token for exactly one site, stores its hash and returns the token (shown once) */
+export async function createToken(stateDir: string, name: string, site: string): Promise<{ token: string; stored: StoredToken }> {
+  if (!site) throw new Error('A token needs the one site it may manage (--site <id>)')
   const token = TOKEN_PREFIX + randomBytes(32).toString('base64url')
-  const stored: StoredToken = { id: randomUUID(), name, hash: sha256(token), sites: unique, createdAt: new Date().toISOString() }
+  const stored: StoredToken = { id: randomUUID(), name, hash: sha256(token), site, createdAt: new Date().toISOString() }
   await writeTokens(stateDir, [...(await readTokens(stateDir)), stored])
   return { token, stored }
 }
@@ -50,10 +49,9 @@ export async function revokeToken(stateDir: string, idOrName: string): Promise<b
   return true
 }
 
-/** The sites a token may manage, limited to the configured ones */
-export function tokenSites(token: StoredToken, configured: Iterable<string>): string[] {
-  const known = new Set(configured)
-  return (Array.isArray(token.sites) ? token.sites : []).filter((id) => known.has(id))
+/** The one site a token may manage, or null when it names none or one that is not configured (any more) */
+export function tokenSite(token: StoredToken, configured: ReadonlySet<string> | ReadonlyMap<string, unknown>): string | null {
+  return typeof token.site === 'string' && configured.has(token.site) ? token.site : null
 }
 
 /** The stored token a bearer value belongs to, or null (constant time per stored token) */

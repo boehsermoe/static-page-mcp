@@ -6,7 +6,7 @@ import { resolveConfig } from '../src/config.js'
 import { resolveInside } from '../src/fence.js'
 import { detectFramework, FRAMEWORKS } from '../src/frameworks.js'
 import { SiteIdentity, verifyIdentity } from '../src/identity.js'
-import { createToken, matchToken, readTokens, revokeToken } from '../src/auth.js'
+import { createToken, matchToken, readTokens, revokeToken, tokenSite } from '../src/auth.js'
 import { applyReplacements, createPage, deletePage, getPage, listPages, updatePage } from '../src/pages.js'
 import { ASTRO_SITE, PLAIN_SITE, makeSite } from './helpers.js'
 
@@ -137,15 +137,20 @@ describe('pages', () => {
 describe('auth tokens', () => {
   it('stores only hashes and matches the right token', async () => {
     const { config } = await makeSite(PLAIN_SITE)
-    const { token, stored } = await createToken(config.stateDir, 'maia', ['example'])
-    expect(stored.sites).toEqual(['example'])
-    await expect(createToken(config.stateDir, 'none', [])).rejects.toThrow(/sites/)
+    const { token, stored } = await createToken(config.stateDir, 'maia', 'example')
+    expect(stored.site).toBe('example')
+    await expect(createToken(config.stateDir, 'none', '')).rejects.toThrow(/one site/)
     const raw = await readFile(path.join(config.stateDir, 'tokens.json'), 'utf8')
     expect(raw).not.toContain(token)
     const tokens = await readTokens(config.stateDir)
     expect(matchToken(tokens, token)?.id).toBe(stored.id)
     expect(matchToken(tokens, token + 'x')).toBeNull()
     expect(matchToken(tokens, undefined)).toBeNull()
+    // Bound to its one configured site; an old multi-site entry or a removed site opens nothing
+    const configured = new Set(['example', 'blog'])
+    expect(tokenSite(stored, configured)).toBe('example')
+    expect(tokenSite({ ...stored, site: 'gone' }, configured)).toBeNull()
+    expect(tokenSite({ ...stored, site: undefined, sites: ['example', 'blog'] } as never, configured)).toBeNull()
     expect(await revokeToken(config.stateDir, 'maia')).toBe(true)
     expect(matchToken(await readTokens(config.stateDir), token)).toBeNull()
   })

@@ -1,12 +1,12 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import express, { type Request, type Response } from 'express'
-import { matchToken, readTokens, tokenSites } from './auth.js'
+import { matchToken, readTokens, tokenSite } from './auth.js'
 import type { ServerContext } from './context.js'
 import { buildMcpServer } from './server.js'
 
 /**
- * HTTP endpoint: POST /mcp (Streamable HTTP, stateless, JSON responses), bearer token required. The token decides
- * which of the server's sites the caller may use; every tool call still names its site. Meant to run on the
+ * HTTP endpoint: POST /mcp (Streamable HTTP, stateless, JSON responses), bearer token required. A token opens
+ * exactly one of the server's sites; every tool call still names that site. Meant to run on the
  * websites' server behind the reverse proxy of each website (e.g. https://example.com/mcp or
  * https://mcp.example.com/mcp), which terminates TLS. Binds to 127.0.0.1 by default.
  */
@@ -46,12 +46,12 @@ export function createApp(ctx: ServerContext) {
       res.status(429).json({ error: 'rate_limited' })
       return
     }
-    const sites = tokenSites(token, ctx.sites.keys())
-    if (sites.length === 0) {
-      res.status(403).json({ error: 'no_sites', message: 'This token may not manage any configured site' })
+    const site = tokenSite(token, ctx.sites)
+    if (!site) {
+      res.status(403).json({ error: 'no_site', message: 'This token is not bound to a configured site' })
       return
     }
-    const server = buildMcpServer(ctx.sites, sites)
+    const server = buildMcpServer(ctx.sites, [site])
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     res.on('close', () => {
       void transport.close()

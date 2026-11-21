@@ -52,12 +52,13 @@ cp static-mcp.config.example.json static-mcp.config.json
 node dist/cli.js sites                            # check the configured sites
 node dist/cli.js init --site example              # creates the site key, writes /.well-known/static-site-mcp.json
 node dist/cli.js init --site blog
-node dist/cli.js token create maia --sites example,blog   # prints the token once
+node dist/cli.js token create maia-example --site example   # one token per site, printed once
+node dist/cli.js token create maia-blog --site blog
 node dist/cli.js serve                            # POST http://127.0.0.1:8787/mcp
 ```
 
 - After `init`, a generator site needs one build + publish so the website serves `/.well-known/static-site-mcp.json`. Every build writes it again.
-- A token opens exactly the listed sites. `token list` shows them, `token revoke <name>` revokes a token at once.
+- A token is bound to exactly ONE site: create one token per website (in MAIA, each website gets its own). `token list` shows each token's site, `token revoke <name>` revokes a token at once.
 - Run `serve` as a service (systemd, pm2). Example unit:
 
 ```ini
@@ -108,7 +109,7 @@ Every tool except `list_sites` takes `site`.
 
 | Tool | Kind | |
 |---|---|---|
-| `list_sites` | read | The sites this token may use |
+| `list_sites` | read | The site this token may use |
 | `site_identity` | read | Signs a nonce with the site's key (domain binding) |
 | `get_site_info` | read | Generator, build and publish setup, latest job |
 | `list_pages`, `get_page` | read | Pages with route, URL, title, kind (content / html / template) |

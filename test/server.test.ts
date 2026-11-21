@@ -164,27 +164,27 @@ describe('HTTP endpoint', () => {
     })
   const init = (url: string, token?: string) => rpc(url, token, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } })
 
-  it('requires a valid bearer token that names at least one configured site', async () => {
+  it('requires a valid bearer token bound to a configured site', async () => {
     const { url, stateDir, close } = await serve()
     try {
-      const { token } = await createToken(stateDir, 'maia', ['example'])
+      const { token } = await createToken(stateDir, 'maia', 'example')
       expect((await init(url)).status).toBe(401)
       expect((await init(url, 'ssm_wrong')).status).toBe(401)
       const res = await init(url, token)
       expect(res.status).toBe(200)
       expect((await res.json()).result.serverInfo.name).toBe('static-site-mcp')
       expect((await fetch(url)).status).toBe(405)
-      const { token: stale } = await createToken(stateDir, 'old', ['removed-site'])
+      const { token: stale } = await createToken(stateDir, 'old', 'removed-site')
       expect((await init(url, stale)).status).toBe(403)
     } finally {
       close()
     }
   })
 
-  it('a token reaches only its own sites', async () => {
+  it('a token reaches only its one site', async () => {
     const { url, stateDir, close } = await serve()
     try {
-      const { token } = await createToken(stateDir, 'maia', ['example'])
+      const { token } = await createToken(stateDir, 'maia', 'example')
       const call = async (name: string, args: Record<string, unknown>) => (await (await rpc(url, token, 'tools/call', { name, arguments: args })).json()).result
       expect((await call('get_page', { site: 'example', id: 'index.html' })).isError).toBeFalsy()
       expect((await call('get_page', { site: 'shop', id: 'index.html' })).isError).toBe(true)

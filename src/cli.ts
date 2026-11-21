@@ -13,8 +13,8 @@ const USAGE = `static-site-mcp <command> [--config static-mcp.config.json]
 Commands:
   sites                              List the configured sites
   init --site <id>                   Create the site's key and publish its public key on the website
-  token create <name> --sites <a,b>  Create an access token for these sites (shown once)
-  token list                         List tokens (names, ids and sites)
+  token create <name> --site <id>    Create an access token for ONE site (shown once)
+  token list                         List tokens (names, ids and their site)
   token revoke <id|name>
   serve                              Start the HTTP server (POST /mcp)
   stdio                              Run over stdio (local MCP clients; all sites)
@@ -47,7 +47,7 @@ function namedSites(config: ServerConfig, list: string | undefined, flag: string
 async function main(argv: string[]) {
   const configFile = option(argv, '--config') ?? 'static-mcp.config.json'
   const siteOption = option(argv, '--site')
-  const sitesOption = option(argv, '--sites')
+  if (argv.includes('--sites')) throw new Error('A token is bound to exactly one site: use --site <id> (one token per site)')
   const [command, sub, arg] = argv
   const config = await loadConfig(configFile)
 
@@ -68,10 +68,12 @@ async function main(argv: string[]) {
     }
     case 'token': {
       if (sub === 'create' && arg) {
-        const { token, stored } = await createToken(config.stateDir, arg, namedSites(config, sitesOption, '--sites'))
-        console.log(`Token "${stored.name}" (${stored.id}) for ${stored.sites.join(', ')}. Copy it now, it is not shown again:\n${token}`)
+        const ids = namedSites(config, siteOption, '--site')
+        if (ids.length !== 1) throw new Error('A token is bound to exactly one site: create one token per site')
+        const { token, stored } = await createToken(config.stateDir, arg, ids[0])
+        console.log(`Token "${stored.name}" (${stored.id}) for ${stored.site}. Copy it now, it is not shown again:\n${token}`)
       } else if (sub === 'list') {
-        for (const t of await readTokens(config.stateDir)) console.log(`${t.id}  ${t.name}  sites: ${(t.sites ?? []).join(', ') || 'none'}  ${t.createdAt}`)
+        for (const t of await readTokens(config.stateDir)) console.log(`${t.id}  ${t.name}  site: ${typeof t.site === 'string' ? t.site : 'none (create a new token)'}  ${t.createdAt}`)
       } else if (sub === 'revoke' && arg) {
         console.log((await revokeToken(config.stateDir, arg)) ? 'Revoked' : 'No such token')
       } else console.log(USAGE)
