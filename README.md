@@ -104,6 +104,14 @@ The check passes only when all of these hold:
 - both name the same host and key,
 - the signature over the nonce is valid.
 
+## Workflow: change, build, publish
+
+1. **Change**: `update_page`, `create_page`, `write_file`, `upload_file`, `delete_*` change the source files only. The website does not show them yet.
+2. **Build** (sites with a build step, see `get_site_info.hasBuild`): `build` starts a background job; poll `get_build_status` until it is `succeeded` or `failed` (with its error and log).
+3. **Publish**: `publish` puts the last build output live (copy, git push or deploy hook), also a job to poll. Only a succeeded publish makes a change visible.
+
+The server's MCP instructions and the tool descriptions say the same, so any agent follows this order. MAIA builds right after an approved change and offers "Publish now" on the card.
+
 ## Tools
 
 Every tool except `list_sites` takes `site`.

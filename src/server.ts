@@ -63,7 +63,11 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
       instructions:
         `Manages ${permitted.length} website(s): ${permitted.map((id) => `${id} (${sites.get(id)!.config.siteUrl})`).join(', ') || 'none for this token'}. ` +
         'EVERY tool takes "site", the id of the website it is for; call list_sites when unsure, never guess. ' +
-        'Pages are source files identified by their path. Change content with update_page, then run build (if the site has one) and publish. ' +
+        'Pages are source files identified by their path. ' +
+        'WORKFLOW, always in this order: 1. change (update_page, create_page, write_file, upload_file, delete_*): this only changes the source files, the website does not show it yet; ' +
+        '2. build (if get_site_info says hasBuild): starts in the background, poll get_build_status until it is no longer "running"; on "failed" read its error and log, fix the source and build again; ' +
+        '3. publish (only after a succeeded build, or right after the change on a site without a build): puts the build output live, also a background job to poll. ' +
+        'Only a succeeded publish makes a change visible on the website. ' +
         'Write tools return the previous file content so a change can be undone with write_file.',
     }
   )
@@ -149,7 +153,7 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
     {
       title: 'Change a page',
       description:
-        'Changes one page. Use frontmatter (merged, null removes a field) and/or body for Markdown pages; replacements (each find must occur exactly once) for small text changes in any page; source to replace the whole file. Returns the page and its previous source.',
+        'Step 1 of change, build, publish (the website shows it only after build and publish). Changes one page. Use frontmatter (merged, null removes a field) and/or body for Markdown pages; replacements (each find must occur exactly once) for small text changes in any page; source to replace the whole file. Returns the page and its previous source.',
       inputSchema: { site: siteArg, id: z.string().min(1), frontmatter: frontmatterSchema.optional(), body: z.string().optional(), source: z.string().optional(), replacements: replacementsSchema.optional() },
       annotations: WRITE,
     },
@@ -202,7 +206,7 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
     'write_file',
     {
       title: 'Write a file',
-      description: 'Creates or replaces a text file (styles, components, config). Returns the previous content (null for a new file).',
+      description: 'Step 1 of change, build, publish. Creates or replaces a text file (styles, components, config). Returns the previous content (null for a new file).',
       inputSchema: { site: siteArg, path: z.string().min(1), content: z.string() },
       annotations: WRITE,
     },
@@ -232,7 +236,7 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
     'build',
     {
       title: 'Build the site',
-      description: 'Starts the configured build of the site in the background and returns the job. Poll get_build_status until it is no longer running.',
+      description: 'Step 2 of change, build, publish: starts the configured build of the site in the background and returns the job. Poll get_build_status until it is no longer running; when it failed, its error and log say why. Only one job runs per site at a time.',
       inputSchema: { site: siteArg },
       annotations: { ...WRITE, idempotentHint: true },
     },
@@ -243,7 +247,7 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
     'publish',
     {
       title: 'Publish the site',
-      description: 'Starts publishing the site (copy the build output, git push, or deploy hook, as configured) in the background. Build first when the site has a build step.',
+      description: 'Step 3 of change, build, publish: starts publishing the site (copy the build output, git push, or deploy hook, as configured) in the background; poll get_build_status. Run it only after a succeeded build (on a site with a build step): it publishes whatever the last build produced.',
       inputSchema: { site: siteArg },
       annotations: { ...WRITE, openWorldHint: true },
     },
@@ -252,7 +256,7 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
 
   server.registerTool(
     'get_build_status',
-    { title: 'Job status', description: "A build or publish job of the site by id (default: the site's latest), with the last log lines.", inputSchema: { site: siteArg, jobId: z.string().optional() }, annotations: READ },
+    { title: 'Job status', description: "A build or publish job of the site by id (default: the site's latest): status running, succeeded or failed, its error and the last log lines.", inputSchema: { site: siteArg, jobId: z.string().optional() }, annotations: READ },
     onSite(({ builds }, { jobId }: { jobId?: string }) => {
       const job = jobId ? builds.get(jobId) : builds.latest()
       if (!job) throw new FenceError(jobId ? `Unknown job ${jobId} on this site` : 'No job has run on this site yet')
