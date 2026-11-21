@@ -6,12 +6,14 @@
       "siteUrl": "https://www.example.com/",
       "root": "/srv/sites/example",
       "framework": "auto",
+      "allow": ["."],
       "publish": { "type": "copy", "targetDir": "/var/www/example.com" }
     },
     "blog": {
       "siteUrl": "https://blog.example.org/",
       "root": "/srv/sites/blog",
       "framework": "astro",
+      "allow": ["src/pages", "src/content", "src/components", "src/layouts", "src/styles", "public"],
       "publish": { "type": "git", "branch": "main" }
     }
   }

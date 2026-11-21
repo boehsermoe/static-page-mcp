@@ -32,7 +32,7 @@ async function connect(sites: SiteContext[], allowed = sites.map((s) => s.config
 async function secondSite(): Promise<SiteContext> {
   const { dir } = await makeSite({})
   await writeFile(path.join(dir, 'site', 'index.html'), '<html><head><title>Shop</title></head></html>')
-  const config = await resolveSite('shop', { siteUrl: 'https://shop.example.org/', root: 'site' }, dir, path.join(dir, 'state'))
+  const config = await resolveSite('shop', { siteUrl: 'https://shop.example.org/', root: 'site', allow: ['.'] }, dir, path.join(dir, 'state'))
   const identity = await SiteIdentity.loadOrCreate(config.stateDir, config.siteUrl, config.host)
   return { config, identity, builds: new BuildRunner(config, identity) }
 }

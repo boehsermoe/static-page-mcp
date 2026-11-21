@@ -14,7 +14,7 @@ export interface FileEntry {
 
 /** Walks the site (or a sub directory), skipping denied and build directories */
 export async function walk(config: SiteConfig, dir = '', filter?: (rel: string) => boolean): Promise<FileEntry[]> {
-  const start = await resolveInside(config, dir)
+  const start = await resolveInside(config, dir, { dir: true })
   const out: FileEntry[] = []
   const output = config.build.outputDir ? config.build.outputDir.replace(/\/+$/, '') : null
   async function visit(abs: string, rel: string) {
@@ -23,7 +23,7 @@ export async function walk(config: SiteConfig, dir = '', filter?: (rel: string) 
     entries.sort((a, b) => a.name.localeCompare(b.name))
     for (const e of entries) {
       const childRel = rel ? `${rel}/${e.name}` : e.name
-      if (!isVisible(config, childRel)) continue
+      if (!isVisible(config, childRel, e.isDirectory())) continue
       if (e.isDirectory()) {
         if (SKIP_DIRS.has(e.name) || childRel === output) continue
         await visit(path.join(abs, e.name), childRel)

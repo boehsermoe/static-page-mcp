@@ -11,7 +11,7 @@ Supported: Astro, Hugo, Eleventy, Jekyll, VitePress, Next.js (static export) and
 Requires Node.js 20 or newer and git.
 
 ```bash
-git clone git@github.com:boehsermoe/maia-static-page-mcp.git /opt/static-site-mcp
+git clone git@github.com:boehsermoe/static-page-mcp.git /opt/static-site-mcp
 cd /opt/static-site-mcp
 npm ci && npm run build
 cp static-mcp.config.example.json static-mcp.config.json
@@ -28,11 +28,13 @@ cp static-mcp.config.example.json static-mcp.config.json
       "siteUrl": "https://www.example.com/",
       "root": "/srv/sites/example",
       "framework": "auto",
+      "allow": ["."],
       "publish": { "type": "copy", "targetDir": "/var/www/example.com" }
     },
     "blog": {
       "siteUrl": "https://blog.example.org/",
       "root": "/srv/sites/blog",
+      "allow": ["src/pages", "src/content", "src/components", "src/layouts", "src/styles", "public"],
       "publish": { "type": "git", "branch": "main" }
     }
   }
@@ -43,7 +45,7 @@ cp static-mcp.config.example.json static-mcp.config.json
 - `root` is the site's working copy. Site roots must not overlap, and each website may appear only once.
 - `build.command` / `build.outputDir` default to the generator's (e.g. `npx astro build` / `dist`). Plain HTML sites have no build.
 - `publish`: `copy` (into the served directory), `git` (commit + push, the hosting builds), `hook` (`{ "type": "hook", "url": "…" }`, a deploy hook) or `none`.
-- `deny`: extra path prefixes the agent may never touch.
+- `allow` (required): the ONLY folders and files the agent may read and write, relative to `root` (e.g. `["src", "public"]`; `["."]` = the whole site). Without it the server does not start. Everything else, including `package.json` and the build config, stays out of reach. Put the folder for uploaded images (the generator's `public`/`static` folder) in it.
 - `stateDir` holds the site keys and token hashes. It must be outside every site and every served directory, or the server refuses to start.
 
 ### Keys, tokens, start
@@ -134,7 +136,7 @@ Publish targets:
 - Path fence:
   - no absolute paths, no `..`, no symlinks out of the root,
   - `.git`, `.env*`, `node_modules`, the state dir and the published key are never reachable,
-  - extra `deny` prefixes from the config are blocked too.
+  - only the folders of the site's `allow` list are reachable at all.
 - 1 MB per text file; uploads only as png, jpg, gif, webp, avif, ico, pdf, woff, woff2 (checked against the file content), max 15 MB. Bearer tokens are stored as SHA-256 hashes, and revoking one applies at once. Rate limit per token.
 - The build runs with a minimal environment (PATH, HOME, locale), never the server's secrets.
 - Every tool result starts with a notice that website content is data, not instructions.

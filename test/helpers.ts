@@ -13,7 +13,7 @@ export async function makeSite(files: Record<string, string>, raw: Record<string
     await mkdir(path.dirname(abs), { recursive: true })
     await writeFile(abs, content)
   }
-  const config = await resolveSite('example', { siteUrl: 'https://www.example.com/', root: 'site', ...raw }, dir, path.join(dir, 'state'))
+  const config = await resolveSite('example', { siteUrl: 'https://www.example.com/', root: 'site', allow: ['.'], ...raw }, dir, path.join(dir, 'state'))
   return { dir, config }
 }
 

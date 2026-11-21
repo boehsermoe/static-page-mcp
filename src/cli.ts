@@ -53,7 +53,7 @@ async function main(argv: string[]) {
 
   switch (command) {
     case 'sites': {
-      for (const site of config.sites.values()) console.log(`${site.id}  ${site.siteUrl}  ${site.framework.label}  ${site.root}`)
+      for (const site of config.sites.values()) console.log(`${site.id}  ${site.siteUrl}  ${site.framework.label}  ${site.root}  allow: ${site.allow.map((p) => p || '.').join(', ')}`)
       return
     }
     case 'init': {

@@ -2,12 +2,12 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { resolveConfig } from '../src/config.js'
+import { resolveConfig, resolveSite } from '../src/config.js'
 import { resolveInside } from '../src/fence.js'
 import { detectFramework, FRAMEWORKS } from '../src/frameworks.js'
 import { SiteIdentity, verifyIdentity } from '../src/identity.js'
 import { createToken, matchToken, readTokens, revokeToken, tokenSite } from '../src/auth.js'
-import { deleteFile, uploadAsset } from '../src/files.js'
+import { deleteFile, uploadAsset, walk } from '../src/files.js'
 import { applyReplacements, createPage, deletePage, getPage, listPages, updatePage } from '../src/pages.js'
 import { ASTRO_SITE, PLAIN_SITE, makeSite } from './helpers.js'
 
@@ -27,9 +27,26 @@ describe('path fence', () => {
     await expect(resolveInside(config, 'link.txt')).rejects.toThrow(/outside/)
   })
 
-  it('honours the configured deny list', async () => {
-    const { config } = await makeSite(PLAIN_SITE, { deny: ['css'] })
-    await expect(resolveInside(config, 'css/site.css')).rejects.toThrow()
+  it('reaches only the folders of the allow list', async () => {
+    const { config } = await makeSite({ ...ASTRO_SITE, 'secrets.json': '{}', 'src/content/notes.md': 'x' }, { allow: ['src/pages', 'public'] })
+    await expect(resolveInside(config, 'src/pages/index.astro')).resolves.toMatchObject({ rel: 'src/pages/index.astro' })
+    await expect(resolveInside(config, 'public/images/new.png')).resolves.toMatchObject({ rel: 'public/images/new.png' })
+    for (const bad of ['secrets.json', 'package.json', 'src/content/notes.md', 'src/pagesX/a.astro', '']) {
+      await expect(resolveInside(config, bad), bad).rejects.toThrow(/allowed folders/)
+    }
+    // Listing walks down to the allowed folders and shows nothing else
+    expect((await walk(config)).map((f) => f.path)).toEqual(['src/pages/_partial.astro', 'src/pages/blog/[slug].astro', 'src/pages/index.astro'])
+    // Still never .git or .env, even when the whole site is allowed
+    const whole = (await makeSite(PLAIN_SITE)).config
+    await expect(resolveInside(whole, '.env')).rejects.toThrow(/not accessible/)
+  })
+
+  it('needs an explicit allow list, and no longer takes deny', async () => {
+    const { dir } = await makeSite({})
+    await expect(resolveSite('a', { siteUrl: 'https://a.com', root: 'site' }, dir, dir)).rejects.toThrow(/allow/)
+    await expect(resolveSite('a', { siteUrl: 'https://a.com', root: 'site', allow: [] }, dir, dir)).rejects.toThrow(/allow/)
+    await expect(resolveSite('a', { siteUrl: 'https://a.com', root: 'site', allow: ['../x'] }, dir, dir)).rejects.toThrow(/inside the site/)
+    await expect(resolveSite('a', { siteUrl: 'https://a.com', root: 'site', allow: ['.'], deny: ['x'] }, dir, dir)).rejects.toThrow(/replaced by "allow"/)
   })
 })
 
@@ -42,14 +59,14 @@ describe('config', () => {
 
   it('reads several sites, each with its own key directory', async () => {
     const dir = await twoSites()
-    const config = await resolveConfig({ stateDir: 'state', sites: { a: { siteUrl: 'https://a.com', root: 'a' }, b: { siteUrl: 'https://b.org', root: 'b' } } }, dir)
+    const config = await resolveConfig({ stateDir: 'state', sites: { a: { siteUrl: 'https://a.com', root: 'a', allow: ['.'] }, b: { siteUrl: 'https://b.org', root: 'b', allow: ['.'] } } }, dir)
     expect([...config.sites.keys()]).toEqual(['a', 'b'])
     expect(config.sites.get('b')).toMatchObject({ id: 'b', host: 'b.org', root: path.join(dir, 'b'), stateDir: path.join(dir, 'state', 'sites', 'b') })
   })
 
   it('refuses anything that makes the site of a call unclear or lets one site reach another', async () => {
     const dir = await twoSites()
-    const site = (url: string, root: string) => ({ siteUrl: url, root })
+    const site = (url: string, root: string) => ({ siteUrl: url, root, allow: ['.'] })
     await expect(resolveConfig({ sites: {} }, dir)).rejects.toThrow(/At least one site/)
     await expect(resolveConfig({ sites: { a: { siteUrl: 'https://a.com' } } }, dir)).rejects.toThrow()
     await expect(resolveConfig({ sites: { 'Bad Id': site('https://a.com', 'a') } }, dir)).rejects.toThrow(/Site ids/)

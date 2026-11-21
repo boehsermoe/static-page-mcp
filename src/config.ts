@@ -38,8 +38,14 @@ const siteSchema = z.object({
   publish: publishSchema.default({ type: 'none' }),
   /** Extra directories (relative to root) that hold content pages */
   contentDirs: z.array(z.string()).optional(),
-  /** Extra path patterns the agent may never read or write (prefix match on the relative path) */
-  deny: z.array(z.string()).default([]),
+  /**
+   * The ONLY folders and files (relative to root, prefix match) the agent may read or write, e.g. ["src", "public"];
+   * "." = the whole site. Required: without an explicit list nothing is reachable. .git, .env*, node_modules and the
+   * site key stay unreachable even inside an allowed folder.
+   */
+  allow: z
+    .array(z.string().min(1))
+    .min(1, 'allow: list the folders/files the agent may use, e.g. ["src", "public"] ("." = the whole site)'),
 })
 
 const configSchema = z.object({
@@ -73,7 +79,8 @@ export interface SiteConfig {
   build: { command: string | null; outputDir: string | null; timeoutSeconds: number }
   publish: ParsedSite['publish']
   contentDirs: string[]
-  deny: string[]
+  /** Allowed path prefixes, normalised ("" = the whole site) */
+  allow: string[]
   /** This site's own state (its key): <stateDir>/sites/<id> */
   stateDir: string
 }
@@ -100,9 +107,17 @@ function servedDirs(site: SiteConfig): string[] {
   return dirs.filter((d): d is string => d !== null)
 }
 
+/** One allow entry as a clean relative prefix ("." becomes "", the whole site) */
+function allowEntry(id: string, entry: string): string {
+  const clean = path.posix.normalize(entry.replace(/\\/g, '/')).replace(/^\.\/+/, '').replace(/\/+$/, '')
+  if (path.posix.isAbsolute(clean) || clean === '..' || clean.startsWith('../')) throw new Error(`Site "${id}": allow entries are paths inside the site, not "${entry}"`)
+  return clean === '.' ? '' : clean
+}
+
 /** One site, resolved against the config file's directory */
 export async function resolveSite(id: string, raw: unknown, baseDir: string, stateDir: string): Promise<SiteConfig> {
   if (!SITE_ID.test(id)) throw new Error(`Invalid site id "${id}"`)
+  if (raw && typeof raw === 'object' && 'deny' in raw) throw new Error(`Site "${id}": "deny" was replaced by "allow", the list of folders the agent may use`)
   const parsed = siteSchema.parse(raw)
   const root = path.resolve(baseDir, parsed.root)
   const frameworkId = (parsed.framework === 'auto' ? await detectFramework(root) : parsed.framework) as FrameworkId
@@ -118,7 +133,7 @@ export async function resolveSite(id: string, raw: unknown, baseDir: string, sta
     build: { command: command ?? null, outputDir: outputDir ?? null, timeoutSeconds: parsed.build.timeoutSeconds },
     publish: parsed.publish.type === 'copy' ? { ...parsed.publish, targetDir: path.resolve(baseDir, parsed.publish.targetDir) } : parsed.publish,
     contentDirs: parsed.contentDirs ?? framework.contentDirs,
-    deny: parsed.deny,
+    allow: parsed.allow.map((entry) => allowEntry(id, entry)),
     stateDir: path.join(stateDir, 'sites', id),
   }
 }
