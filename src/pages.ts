@@ -162,5 +162,6 @@ export async function createPage(config: SiteConfig, id: string, init: { frontma
 export async function deletePage(config: SiteConfig, id: string): Promise<{ id: string; previous: string }> {
   const rel = await requirePage(config, id)
   const { previous } = await deleteFile(config, rel)
-  return { id: rel, previous }
+  // Pages are text files: their content always comes back
+  return { id: rel, previous: previous ?? '' }
 }

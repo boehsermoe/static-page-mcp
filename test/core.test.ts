@@ -7,6 +7,7 @@ import { resolveInside } from '../src/fence.js'
 import { detectFramework, FRAMEWORKS } from '../src/frameworks.js'
 import { SiteIdentity, verifyIdentity } from '../src/identity.js'
 import { createToken, matchToken, readTokens, revokeToken, tokenSite } from '../src/auth.js'
+import { deleteFile, uploadAsset } from '../src/files.js'
 import { applyReplacements, createPage, deletePage, getPage, listPages, updatePage } from '../src/pages.js'
 import { ASTRO_SITE, PLAIN_SITE, makeSite } from './helpers.js'
 
@@ -131,6 +132,29 @@ describe('pages', () => {
     await expect(getPage(config, 'src/components/Header.astro')).rejects.toThrow(/Not a page/)
     const { previous } = await deletePage(config, 'src/content/blog/second.md')
     expect(previous).toContain('Second')
+  })
+})
+
+describe('uploads', () => {
+  const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 1)])
+
+  it('stores an image, never over an existing file, and deletes it again', async () => {
+    const { config } = await makeSite(ASTRO_SITE)
+    expect(await uploadAsset(config, 'public/images/hero.png', PNG.toString('base64'))).toEqual({ path: 'public/images/hero.png', size: PNG.length })
+    expect(await readFile(path.join(config.root, 'public/images/hero.png'))).toEqual(PNG)
+    await expect(uploadAsset(config, 'public/images/hero.png', PNG.toString('base64'))).rejects.toThrow(/already exists/)
+    expect(await deleteFile(config, 'public/images/hero.png')).toEqual({ path: 'public/images/hero.png', previous: null, size: PNG.length })
+  })
+
+  it('refuses other types, content that does not match, and paths outside the fence', async () => {
+    const { config } = await makeSite(ASTRO_SITE)
+    const png = PNG.toString('base64')
+    await expect(uploadAsset(config, 'public/x.svg', png)).rejects.toThrow(/Only these file types/)
+    await expect(uploadAsset(config, 'public/x.js', png)).rejects.toThrow(/Only these file types/)
+    await expect(uploadAsset(config, 'public/x.jpg', png)).rejects.toThrow(/no \.jpg file/)
+    await expect(uploadAsset(config, 'public/x.png', 'not base64!')).rejects.toThrow(/base64/)
+    await expect(uploadAsset(config, '../x.png', png)).rejects.toThrow(/outside/)
+    await expect(uploadAsset(config, '.git/x.png', png)).rejects.toThrow(/not accessible/)
   })
 })
 

@@ -116,7 +116,8 @@ Every tool except `list_sites` takes `site`.
 | `list_files`, `read_file`, `search_files` | read | Site sources |
 | `update_page` | write | Frontmatter merge + body (Markdown), exact replacements, or full source; returns `previous` |
 | `create_page`, `write_file` | write | Returns `previous` (null for new files) |
-| `delete_page`, `delete_file` | destructive | Returns `previous` |
+| `upload_file` | write | Uploads an image, icon, PDF or font (base64, max 15 MB) into the site, e.g. its `assetDir`; never replaces an existing file |
+| `delete_page`, `delete_file` | destructive | Returns `previous` (null for binary files) |
 | `build`, `publish` | write | Background jobs; poll `get_build_status` |
 | `get_build_status` | read | Job status and last 200 log lines |
 
@@ -134,7 +135,7 @@ Publish targets:
   - no absolute paths, no `..`, no symlinks out of the root,
   - `.git`, `.env*`, `node_modules`, the state dir and the published key are never reachable,
   - extra `deny` prefixes from the config are blocked too.
-- 1 MB per file. Bearer tokens are stored as SHA-256 hashes, and revoking one applies at once. Rate limit per token.
+- 1 MB per text file; uploads only as png, jpg, gif, webp, avif, ico, pdf, woff, woff2 (checked against the file content), max 15 MB. Bearer tokens are stored as SHA-256 hashes, and revoking one applies at once. Rate limit per token.
 - The build runs with a minimal environment (PATH, HOME, locale), never the server's secrets.
 - Every tool result starts with a notice that website content is data, not instructions.
 

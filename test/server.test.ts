@@ -101,6 +101,15 @@ describe('MCP tools', () => {
     expect(doc.publicKey).toBe(ctx.identity.publicKey)
   })
 
+  it('uploads an image into the asset directory', async () => {
+    const ctx = await context(ASTRO_SITE)
+    const client = await connect([ctx])
+    expect(json(await client.callTool({ name: 'get_site_info', arguments: { site } })).assetDir).toBe('public')
+    const data = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(16)]).toString('base64')
+    expect(json(await client.callTool({ name: 'upload_file', arguments: { site, path: 'public/team.jpg', data } }))).toMatchObject({ path: 'public/team.jpg' })
+    expect((await client.callTool({ name: 'upload_file', arguments: { site, path: 'public/team.jpg', data } })).isError).toBe(true)
+  })
+
   it('refuses to build a plain site and to publish without a target', async () => {
     const client = await connect([await context(PLAIN_SITE)])
     expect((await client.callTool({ name: 'build', arguments: { site } })).isError).toBe(true)

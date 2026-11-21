@@ -59,10 +59,59 @@ export async function writeText(config: SiteConfig, rel: string, content: string
   return { path: clean, previous }
 }
 
-export async function deleteFile(config: SiteConfig, rel: string): Promise<{ path: string; previous: string }> {
+/** Binary files the agent may upload (images, icons, PDFs, fonts), by extension, with the bytes they must start with */
+const ASSET_SIGNATURES: Record<string, (b: Buffer) => boolean> = {
+  png: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  jpg: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  gif: (b) => b.subarray(0, 4).toString('latin1') === 'GIF8',
+  webp: (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP',
+  avif: (b) => b.subarray(4, 8).toString('latin1') === 'ftyp' && /^avi[fs]$/.test(b.subarray(8, 12).toString('latin1')),
+  ico: (b) => b[0] === 0 && b[1] === 0 && b[2] === 1 && b[3] === 0,
+  pdf: (b) => b.subarray(0, 5).toString('latin1') === '%PDF-',
+  woff: (b) => b.subarray(0, 4).toString('latin1') === 'wOFF',
+  woff2: (b) => b.subarray(0, 4).toString('latin1') === 'wOF2',
+}
+ASSET_SIGNATURES.jpeg = ASSET_SIGNATURES.jpg
+export const ASSET_EXTENSIONS = Object.keys(ASSET_SIGNATURES)
+export const MAX_ASSET_BYTES = 15 * 1024 * 1024
+
+const assetExtension = (rel: string) => {
+  const ext = path.posix.extname(rel).slice(1).toLowerCase()
+  return ext in ASSET_SIGNATURES ? ext : null
+}
+
+/**
+ * Uploads a binary file (image, icon, PDF, font) as base64. Never replaces an existing file: a new image gets a new
+ * name and the page refers to it, so an undo is simply deleting it again.
+ */
+export async function uploadAsset(config: SiteConfig, rel: string, base64: string): Promise<{ path: string; size: number }> {
+  const ext = assetExtension(rel)
+  if (!ext) throw new FenceError(`Only these file types can be uploaded: ${ASSET_EXTENSIONS.join(', ')} (text files go through write_file)`)
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) throw new FenceError('data must be base64')
+  const data = Buffer.from(base64, 'base64')
+  if (data.length === 0) throw new FenceError('The file is empty')
+  if (data.length > MAX_ASSET_BYTES) throw new FenceError(`The file is too large (max ${MAX_ASSET_BYTES / 1024 / 1024} MB)`)
+  if (!ASSET_SIGNATURES[ext](data)) throw new FenceError(`The content is no .${ext} file`)
+  const { abs, rel: clean } = await resolveInside(config, rel)
+  if (!clean) throw new FenceError('A file path is required')
+  if (await stat(abs).catch(() => null)) throw new FenceError(`A file already exists at ${clean}: upload under a new name`)
+  await mkdir(path.dirname(abs), { recursive: true })
+  await writeFile(abs, data, { flag: 'wx' })
+  return { path: clean, size: data.length }
+}
+
+/** Deletes a file. Text files return their previous content (for undo); uploaded binaries return null and their size */
+export async function deleteFile(config: SiteConfig, rel: string): Promise<{ path: string; previous: string | null; size: number }> {
+  if (assetExtension(rel)) {
+    const { abs, rel: clean } = await resolveInside(config, rel)
+    const s = await stat(abs).catch(() => null)
+    if (!s || !s.isFile()) throw new FenceError(`File not found: ${rel}`)
+    await rm(abs)
+    return { path: clean, previous: null, size: s.size }
+  }
   const { path: clean, content } = await readText(config, rel)
   await rm((await resolveInside(config, clean)).abs)
-  return { path: clean, previous: content }
+  return { path: clean, previous: content, size: Buffer.byteLength(content) }
 }
 
 export interface SearchHit {

@@ -13,7 +13,8 @@ import { buildMcpServer } from './server.js'
 export function createApp(ctx: ServerContext) {
   const app = express()
   app.disable('x-powered-by')
-  app.use(express.json({ limit: '2mb' }))
+  // Uploads of up to 15 MB arrive as base64
+  app.use(express.json({ limit: '25mb' }))
 
   // Simple fixed window per token
   const windows = new Map<string, { start: number; count: number }>()

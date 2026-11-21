@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { BuildRunner, Job } from './build.js'
 import type { SiteConfig } from './config.js'
 import { FenceError } from './fence.js'
-import { readText, searchFiles, walk, writeText, deleteFile } from './files.js'
+import { ASSET_EXTENSIONS, MAX_ASSET_BYTES, deleteFile, readText, searchFiles, uploadAsset, walk, writeText } from './files.js'
 import type { SiteIdentity } from './identity.js'
 import { createPage, deletePage, getPage, listPages, updatePage } from './pages.js'
 
@@ -117,6 +117,8 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
         siteUrl: config.siteUrl,
         framework: { id: config.framework.id, label: config.framework.label },
         contentDirs: config.contentDirs,
+        // Where images and other static files go: copied as they are into the build output
+        assetDir: config.framework.publicDir ?? '',
         hasBuild: Boolean(config.build.command),
         buildOutput: config.build.outputDir,
         publish: config.publish.type,
@@ -208,8 +210,21 @@ export function buildMcpServer(sites: Sites, allowed: readonly string[]): McpSer
   )
 
   server.registerTool(
+    'upload_file',
+    {
+      title: 'Upload a file',
+      description:
+        `Uploads a binary file (${ASSET_EXTENSIONS.join(', ')}; max ${MAX_ASSET_BYTES / 1024 / 1024} MB) as base64, e.g. an image into the site's assetDir (see get_site_info). ` +
+        'Never replaces an existing file: use a new name and refer to it from the page.',
+      inputSchema: { site: siteArg, path: z.string().min(1), data: z.string().min(1).max(Math.ceil((MAX_ASSET_BYTES * 4) / 3) + 4).describe('The file content, base64') },
+      annotations: WRITE,
+    },
+    onSite(({ config }, { path, data }: { path: string; data: string }) => uploadAsset(config, path, data))
+  )
+
+  server.registerTool(
     'delete_file',
-    { title: 'Delete a file', description: 'Deletes a text file. Returns its previous content.', inputSchema: { site: siteArg, path: z.string().min(1) }, annotations: DESTRUCTIVE },
+    { title: 'Delete a file', description: 'Deletes a file. Returns the previous content of a text file (null for a binary file such as an image).', inputSchema: { site: siteArg, path: z.string().min(1) }, annotations: DESTRUCTIVE },
     onSite(({ config }, { path }: { path: string }) => deleteFile(config, path))
   )
 
